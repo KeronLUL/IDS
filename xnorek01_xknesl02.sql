@@ -183,3 +183,29 @@ INSERT INTO vrazdy (cil, vrah, objednavatel, id_uzemi)
 VALUES ('Thomas Angelo', 3, 1, 3);
 INSERT INTO vrazdy (cil, vrah, objednavatel, id_uzemi)
 VALUES ('Luca Gurino', 4, 5, 1);
+
+-- Kdo provadi kriminalni aktivitu se jmenem Ochrana Dona Salieriho?
+-- spojeni dvou tabulek
+SELECT jmeno as name
+FROM clen
+JOIN kriminalni_cinnost kc on clen.id_cinnosti = kc.id
+WHERE kc.unik_jmeno = 'Ochrana Dona Salieriho'
+ORDER BY name;
+
+-- Ktery don vede kriminalni cinnost?
+-- spojeni dvou tabulek
+SELECT jmeno as name
+FROM don
+JOIN kriminalni_cinnost kc on don.id = kc.don
+WHERE kc.don IS NOT NULL
+ORDER BY kc.id;
+
+
+SELECT
+    jmeno as name,
+    hodnost as hodnost,
+    id_cinnosti as cinnost
+FROM clen
+JOIN kriminalni_cinnost kc on clen.id_cinnosti = kc.id
+JOIN vrazdy v on clen.id = v.vrah
+ORDER BY jmeno;
