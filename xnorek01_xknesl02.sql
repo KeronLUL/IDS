@@ -1,4 +1,4 @@
--- Projekt 2. část - SQL skript pro vytvoření základních objektů schématu
+-- Projekt 4. část
 -- Autor: Karel Norek - xnorek01
 -- Autor: Martin Kneslík - xknesl02
 
@@ -10,6 +10,9 @@ DROP TABLE kriminalni_cinnost;
 DROP TABLE don;
 DROP TABLE aliance;
 DROP TABLE schuzka;
+DROP MATERIALIZED VIEW clenSaliery;
+DROP SEQUENCE don_id;
+DROP INDEX jmeno_clena;
 
 CREATE TABLE schuzka (
     poradi      INT GENERATED AS IDENTITY PRIMARY KEY,
@@ -26,7 +29,7 @@ CREATE TABLE aliance (
 );
 
 CREATE TABLE don (
-    id          INT GENERATED AS IDENTITY PRIMARY KEY,
+    id          INT DEFAULT NULL PRIMARY KEY,
     jmeno       VARCHAR(50) NOT NULL,
     vek         INT NOT NULL CHECK (vek >= 0),
     doba_funkce INT NOT NULL CHECK (doba_funkce >= 0),
@@ -78,7 +81,7 @@ CREATE TABLE uzemi (
     cinnost  INT,
     CONSTRAINT uzemi_fk
         FOREIGN KEY (cinnost)
-        REFERENCES kriminalni_cinnost (id) ON DELETE CASCADE
+        REFERENCES kriminalni_cinnost (id) ON DELETE SET NULL
 );
 
 CREATE table don_schuzka(
@@ -105,6 +108,25 @@ CREATE TABLE vrazdy (
         FOREIGN KEY (id_uzemi)
         REFERENCES uzemi (id) ON DELETE CASCADE
 );
+
+CREATE SEQUENCE don_id;
+CREATE OR REPLACE TRIGGER don_id
+        BEFORE INSERT ON don
+        FOR EACH ROW
+BEGIN
+    IF :NEW.id IS NULL then
+        :NEW.id := don_id.nextval;
+    END IF;
+END;
+
+CREATE OR REPLACE TRIGGER povys_clena
+        BEFORE INSERT ON vrazdy
+        FOR EACH ROW
+BEGIN
+        UPDATE clen SET hodnost = 'Zkuseny clen'
+        WHERE id = :NEW.vrah;
+END;
+
 
 INSERT INTO schuzka (cislo_domu, ulice, mesto, cas)
 VALUES (157, '2nd street', 'New York', timestamp '2021-06-06 15:00:00');
@@ -179,10 +201,25 @@ VALUES (4, 3);
 INSERT INTO don_schuzka (don, poradi_schuzky)
 VALUES (5, 3);
 
-INSERT INTO vrazdy (cil, vrah, objednavatel, id_uzemi)
-VALUES ('Thomas Angelo', 3, 1, 3);
+
 INSERT INTO vrazdy (cil, vrah, objednavatel, id_uzemi)
 VALUES ('Luca Gurino', 4, 5, 1);
+INSERT INTO vrazdy (cil, vrah, objednavatel, id_uzemi)
+VALUES ('Harry Mardsen', 3, 5, 1);
+INSERT INTO vrazdy (cil, vrah, objednavatel, id_uzemi)
+VALUES ('Mike Bruski', 1, 3, 1);
+
+
+-- Předvedení triggeru (1):
+SELECT id, jmeno
+FROM don
+ORDER BY id;
+
+-- Předvedení triggeru (2):
+SELECT id, jmeno, hodnost FROM clen WHERE id = 3;
+INSERT INTO vrazdy (cil, vrah, objednavatel, id_uzemi) VALUES ('Thomas Angelo', 3, 1, 3);
+SELECT id, jmeno, hodnost FROM clen WHERE id = 3;
+
 
 -- Kdo provadi kriminalni aktivitu se jmenem Ochrana Dona Salieriho?
 -- spojeni dvou tabulek
@@ -200,7 +237,6 @@ JOIN kriminalni_cinnost kc on don.id = kc.don
 WHERE kc.don IS NOT NULL
 ORDER BY kc.id;
 
-
 SELECT
     jmeno as name,
     hodnost as hodnost,
@@ -209,3 +245,123 @@ FROM clen
 JOIN kriminalni_cinnost kc on clen.id_cinnosti = kc.id
 JOIN vrazdy v on clen.id = v.vrah
 ORDER BY jmeno;
+
+-- Procedura vypíše průměrný počet členů v rodině
+CREATE OR REPLACE PROCEDURE don_members
+AS
+    pocet_donu NUMBER;
+    pocet_clenu NUMBER;
+    prum_clen NUMBER;
+BEGIN
+    SELECT COUNT(*) INTO pocet_donu FROM don;
+    SELECT COUNT(*) INTO pocet_clenu FROM clen;
+
+    prum_clen := pocet_clenu / pocet_donu;
+
+
+    DBMS_OUTPUT.put_line(
+        'Prumerny pocet clenu je ' || prum_clen
+    );
+
+    EXCEPTION WHEN ZERO_DIVIDE THEN
+    BEGIN
+        IF pocet_donu = 0 THEN
+            DBMS_OUTPUT.put_line('Zadny Don neexistuje!');
+        END IF;
+    END;
+END;
+
+BEGIN don_members; END;
+
+
+-- Procedura, ktera vypise kolik clenu vykonava urcitou cinnost
+CREATE OR REPLACE PROCEDURE pocet_clenu_cinnosti
+    (nazev_cinnosti IN VARCHAR)
+AS
+    clenove NUMBER;
+    dana_cinnost_clenove NUMBER;
+    cinnost kriminalni_cinnost.id%TYPE;
+    dana_cinnost kriminalni_cinnost.id%TYPE;
+    CURSOR cursor_cinnost IS SELECT id_cinnosti FROM clen;
+BEGIN
+    SELECT COUNT(*) INTO clenove from clen;
+
+    dana_cinnost_clenove := 0;
+
+    SELECT id INTO dana_cinnost
+    FROM kriminalni_cinnost
+    WHERE unik_jmeno = nazev_cinnosti;
+
+    OPEN cursor_cinnost;
+    LOOP
+        FETCH cursor_cinnost into cinnost;
+        EXIT WHEN cursor_cinnost%NOTFOUND;
+
+        IF cinnost = dana_cinnost THEN
+            dana_cinnost_clenove := dana_cinnost_clenove + 1;
+        end if;
+    end loop;
+    CLOSE cursor_cinnost;
+
+    DBMS_OUTPUT.PUT_LINE(
+        'Cinnost ' || nazev_cinnosti || ' je provadena ' ||
+        dana_cinnost_clenove || ' z ' || clenove || ' clenu'
+        );
+
+    EXCEPTION WHEN NO_DATA_FOUND THEN
+	BEGIN
+		DBMS_OUTPUT.put_line(
+			'Cinnost ' || nazev_cinnosti || ' nenalezena'
+		);
+	END;
+END;
+
+-- Kolik clenu vykonava cinnost Ochrana Dona Salieriho?
+BEGIN pocet_clenu_cinnosti('Ochrana Dona Salieriho'); END;
+
+EXPLAIN PLAN FOR
+SELECT jmeno, COUNT(*) AS pocet_vrazd
+FROM clen c
+JOIN vrazdy v
+ON c.ID = v.vrah
+GROUP BY c.jmeno
+ORDER BY pocet_vrazd DESC;
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+CREATE INDEX jmeno_clena ON clen (jmeno);
+
+EXPLAIN PLAN FOR
+SELECT jmeno, COUNT(*) AS pocet_vrazd
+FROM clen c
+JOIN vrazdy v
+ON c.ID = v.vrah
+GROUP BY c.jmeno
+ORDER BY pocet_vrazd DESC;
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+-- Prava
+GRANT ALL ON aliance TO xknesl02;
+GRANT ALL ON clen TO xknesl02;
+GRANT ALL ON don TO xknesl02;
+GRANT ALL ON don_schuzka TO xknesl02;
+GRANT ALL ON schuzka TO xknesl02;
+GRANT ALL ON uzemi TO xknesl02;
+GRANT ALL ON vrazdy TO xknesl02;
+
+GRANT EXECUTE ON don_members TO xknesl02;
+GRANT EXECUTE ON pocet_clenu_cinnosti TO xknesl02;
+
+-- Pohled na cleny dona Salieriho
+CREATE MATERIALIZED VIEW clenSaliery AS
+    SELECT M.*
+    FROM clen M, don D
+    WHERE M.don = D.id and D.jmeno = 'Ennio Salieri';
+
+-- Vypis z pohledu kde clen ma hodnost Zkuseny clen
+SELECT * FROM clenSaliery WHERE hodnost = 'Zkuseny clen';
+
+-- Aktualizace hodnoty v pohledu
+UPDATE clen SET hodnost = 'Zkuseny clen' WHERE don = 1;
+
+-- Vypis aktualizovaneho pohledu
+SELECT * FROM clenSaliery WHERE hodnost = 'Zkuseny clen';
