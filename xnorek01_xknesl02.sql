@@ -247,7 +247,7 @@ JOIN vrazdy v on clen.id = v.vrah
 ORDER BY jmeno;
 
 -- Procedura vypíše průměrný počet členů v rodině
-CREATE OR REPLACE PROCEDURE don_members
+CREATE OR REPLACE PROCEDURE prumerna_velikost_rodiny
 AS
     pocet_donu NUMBER;
     pocet_clenu NUMBER;
@@ -271,7 +271,7 @@ BEGIN
     END;
 END;
 
-BEGIN don_members; END;
+BEGIN prumerna_velikost_rodiny; END;
 
 
 -- Procedura, ktera vypise kolik clenu vykonava urcitou cinnost
