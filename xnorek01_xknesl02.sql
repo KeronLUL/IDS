@@ -319,6 +319,8 @@ END;
 -- Kolik clenu vykonava cinnost Ochrana Dona Salieriho?
 BEGIN pocet_clenu_cinnosti('Ochrana Dona Salieriho'); END;
 
+
+-- Explain plan nad selectem, ktery zobrazi pocet vrazd clenu
 EXPLAIN PLAN FOR
 SELECT jmeno, COUNT(*) AS pocet_vrazd
 FROM clen c
