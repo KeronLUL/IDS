@@ -124,7 +124,7 @@ CREATE OR REPLACE TRIGGER povys_clena
         FOR EACH ROW
 BEGIN
         UPDATE clen SET hodnost = 'Zkuseny clen'
-        WHERE id = :NEW.vrah;
+        WHERE id = :NEW.vrah AND hodnost = 'Radny clen';
 END;
 
 
@@ -216,9 +216,9 @@ FROM don
 ORDER BY id;
 
 -- Předvedení triggeru (2):
-SELECT id, jmeno, hodnost FROM clen WHERE id = 3;
-INSERT INTO vrazdy (cil, vrah, objednavatel, id_uzemi) VALUES ('Thomas Angelo', 3, 1, 3);
-SELECT id, jmeno, hodnost FROM clen WHERE id = 3;
+SELECT id, jmeno, hodnost FROM clen WHERE id = 2;
+INSERT INTO vrazdy (cil, vrah, objednavatel, id_uzemi) VALUES ('Thomas Angelo', 2, 1, 3);
+SELECT id, jmeno, hodnost FROM clen WHERE id = 2;
 
 
 -- Kdo provadi kriminalni aktivitu se jmenem Ochrana Dona Salieriho?
